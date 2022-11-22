@@ -7,8 +7,6 @@ class Monster:
         self.mask = mask
     
     def resize(self, h,w):
-        
-        
         try:
             mh,mw,mc = self.monster.shape
             ratio = w/mw
@@ -21,9 +19,7 @@ class Monster:
             print('resize error', e)
             
     def draw(self, image, posy, posx, h, w):
-        self.resize(h,w)
-        
-        
+        self.resize(h,w)        
         try:
             h,w,c = image.shape
             hm, wm, cm = self.monster_resized.shape
@@ -31,7 +27,6 @@ class Monster:
             yp1 = yp0+hm
             xp0 = int(posx) - int(wm/2)
             xp1 = xp0+wm
-            
             
             mask = np.zeros_like(image)
             mon_resized = np.zeros_like(image)

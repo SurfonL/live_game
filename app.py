@@ -31,7 +31,7 @@ import datetime
 import pickle
 import os
 import glob
-
+from streamlit_autorefresh import st_autorefresh
 
 
 
@@ -45,6 +45,7 @@ now = datetime.datetime.now()
 
 st.set_page_config(initial_sidebar_state="collapsed")
 def main():
+    count = st_autorefresh(interval=2000, limit=10000, key="fizzbuzzcounter")
     st.header("gooutandmakesomefriendsplease")
 
     pages = {
@@ -91,26 +92,31 @@ def init_run(monster_name):
         
     mon_dir = 'monsters/{}/{}.jpg'.format(cap,monster_name)
     mask_dir = 'monsters/{}/{}_mask.jpg'.format(cap, monster_name)
+    effect_dir = 'monsters/{}/{}.jpg'.format('effects', 'bang')
+    effect_mask = 'monsters/{}/{}_mask.jpg'.format('effects', 'bang')
+    
     monster = cv2.imread(mon_dir)
     mask = cv2.imread(mask_dir)
+    effect = cv2.imread(effect_dir)
+    effect_mask = cv2.imread(effect_mask)
     
-    return  frcnn, weights, monster, mask
+    
+    return  frcnn, weights, [monster, mask, effect, effect_mask]
 
 global save_, retake_, hor
-save_ = threading.Event()
+atk = threading.Event()
 retake_ = threading.Event()
 # saved_ = threading.Event()
 
 
 
 
-def app_object_detection():    
-     
+def app_object_detection():
+    
+    
     # Session-specific caching   
     cache_key = "object_detection_dnn"
 
-    
-    
     transforms = T.Compose([
                             T.ToTensor(),
                             # T.Resize((512,512)),
@@ -121,7 +127,8 @@ def app_object_detection():
     original_label = col2.text_input("name of the object", "car")
     disp = col3.radio("disp", ["monster", "box"], index=0)
     
-    t1, t2, t3, t4= st.columns(4)
+    t1= st.columns(1)
+    t1 = t1[0]
     # t4.button("save", on_click = _save_data)
     
     
@@ -131,14 +138,18 @@ def app_object_detection():
     # exp_dir = exp_dir.lower()
     # Path(exp_dir).mkdir(parents=True, exist_ok=True)
     
-    frcnn, weights, monster, mask = init_run(monster_name)
+    frcnn, weights, imgs = init_run(monster_name)
     net = frcnn
     # lock = threading.Lock()
     # lock.acquire()
     
-    
+    monster, mask = imgs[0], imgs[1]
     global Mon
     Mon = Monster(monster=monster,mask=mask)
+    
+    global Eff
+    eff, eff_mask = imgs[2], imgs[3]
+    Eff = Monster(eff, eff_mask)
     # lock.release()
     ra = 0.5
     font = 'Ubuntu-R.ttf'
@@ -149,7 +160,7 @@ def app_object_detection():
     # img_container = {"img": None, 'box':None, 'detection':None}
     def callback(frame: av.VideoFrame) -> av.VideoFrame:
         # lock = threading.Lock()
-        global monster, mask
+        global monster, mask, atk
         
 
         image = frame.to_ndarray(format="bgr24")
@@ -202,8 +213,14 @@ def app_object_detection():
                 image_monster = Mon.draw(disp_image, posy, posx, h_r,w_r)
                 # lock.release()
                 disp_image = image_monster if isinstance(image_monster, (np.ndarray, np.generic) ) else disp_image
-
-            
+                
+                
+                
+                if atk.isSet():
+                    atk.clear()
+                    h_r, w_r = int(h/5), int(b[0,3]-b[0,1])
+                    image_eff = Eff.draw(disp_image,posy, posx, h_r,w_r)
+                    disp_image = image_eff if isinstance(image_eff, (np.ndarray, np.generic) ) else disp_image
         
         disp_image = disp_image.astype(np.uint8)       
         disp_image = cv2.cvtColor(disp_image,cv2.COLOR_RGB2BGR)
@@ -215,39 +232,20 @@ def app_object_detection():
         # rtc_configuration=RTC_CONFIGURATION,
         video_frame_callback=callback,
         media_stream_constraints={"video": {
-            "width": 540, "height": 720, "framerate": {"max":2}}, 
-                                  "audio": False,
-                                  },
-        async_processing=True,
-    )
+            "width": 720, "height": 720, "framerate": {"max":2}}, "audio": False,}, async_processing=True)
+    col1, col2, col3, col4 = st.columns(4)
+    col4.button("ATTACK", on_click=reduce_health)
+    col1.button("rst", on_click=reset_health)
     
     
-    pr = pickle.load(open('hor.pkl', 'rb'))
-    t3.write('last saved: '+ str(pr))
-    
-    pr = 0 if pr == 11 else pr+1
-    global hor
-    hor = t2.number_input("horizontal start from", min_value = 0, max_value = 11, value = pr)
-    t1.write("horizontal idx: {}".format(hor))
-    
-    
-    
+    hor = pickle.load(open('metadata/hor.pkl', 'rb'))
+    t1.slider("HP", min_value=0, max_value= 100, value=hor)
+
+
+   
 
     
-  
-    
-
-    
-    
-    col1, col2, col3 = st.columns(3)
-    vertical = col1.radio("vertical", ["low", "high"], index = 0)
-    distance = col2.radio("distance", ["close", "far"], index = 0)
-    light = col3.radio("light",["white", "orange"], index = 0)
-    col1, col2 = st.columns(2)
-    txt = col1.text_input("load exp name", "none")
-    ra = col2.slider('compare ratio', min_value=0.0, max_value=1.0, value=0.5)
-    
-    d = "{}-{}-{}/".format(vertical,distance,light)
+    # d = "{}-{}-{}/".format(vertical,distance,light)
     # Path(exp_dir+d).mkdir(parents=True, exist_ok=True)
 
    
@@ -267,21 +265,20 @@ def app_object_detection():
     # if save_ and img != None:
     #     print('save', save_)
     #     save_data(box,img,det)
-    
-            
-    
-    
-def set_session_state():
-    if 'hor' not in st.session_state:
-        st.session_state.hor = 0
-    if 'save' not in st.session_state:
-        st.session_state.save = False
-    if 'retake' not in st.session_state:
-        st.session_state.retake = False
-
         
-
     
+def reduce_health():
+    global hor, atk
+    hor = pickle.load(open('metadata/hor.pkl', 'rb'))
+    hor = hor - 10
+    pickle.dump(hor, open('metadata/hor.pkl', 'wb'))
+    atk.set()
+        
+def reset_health():
+    global hor
+    hor = 100
+    pickle.dump(hor, open('metadata/hor.pkl', 'wb'))
+    pr = pickle.load(open('metadata/hor.pkl', 'rb'))
 
 
 
