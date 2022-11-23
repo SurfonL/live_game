@@ -203,7 +203,7 @@ def app_object_detection():
         elif disp == 'monster':
             disp_image = image.permute(1,2,0).to(torch.uint8).detach().cpu().numpy()
             if len(b) != 0:
-                h_r, w_r = int(h/5), int(b[0,3]-b[0,1])
+                h_r, w_r = int(h/5), int(b[0,2]-b[0,0])
                 # lock.acquire()
                 
                 
@@ -218,7 +218,7 @@ def app_object_detection():
                 
                 if atk.isSet():
                     atk.clear()
-                    h_r, w_r = int(h/5), int(b[0,3]-b[0,1])
+                    h_r, w_r = int(h/5), int(b[0,2]-b[0,0])
                     image_eff = Eff.draw(disp_image,posy, posx, h_r,w_r)
                     disp_image = image_eff if isinstance(image_eff, (np.ndarray, np.generic) ) else disp_image
         
@@ -232,7 +232,7 @@ def app_object_detection():
         # rtc_configuration=RTC_CONFIGURATION,
         video_frame_callback=callback,
         media_stream_constraints={"video": {
-            "width": 720, "height": 720, "framerate": {"max":2}}, "audio": False,}, async_processing=True)
+            "width": 1024, "height": 720, "framerate": {"max":5}}, "audio": False,}, async_processing=True)
     col1, col2, col3, col4 = st.columns(4)
     col4.button("ATTACK", on_click=reduce_health)
     col1.button("rst", on_click=reset_health)
